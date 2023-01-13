@@ -3,6 +3,7 @@ from collections import OrderedDict
 from tqdm import tqdm
 import argparse
 import pandas as pd
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def download_video(vids, target_dir, youtube_dl):
     for url in tqdm(vids):
@@ -10,6 +11,28 @@ def download_video(vids, target_dir, youtube_dl):
         print(" ".join(cmd))
         subprocess.run(" ".join(cmd), shell=True)
     return
+
+
+def download_single_video(url, target_dir, youtube_dl):
+    cmd = [youtube_dl, url , "-f", "bestvideo+bestaudio[ext=m4a]/bestvideo+bestaudio/best", "--merge-output-format", "mp4", "--no-check-certificate", "--restrict-filenames", "-o", "'"+target_dir+"/%(id)s.%(ext)s"+"'"]
+    print(" ".join(cmd))
+    subprocess.run(" ".join(cmd), shell=True)
+
+def download_video_ppool(vids, target_dir, youtube_dl):
+    futures = {}
+    with ProcessPoolExecutor(max_workers=20) as executor:
+        with tqdm(total=len(vids)) as progress_bar:
+            for idx, url in enumerate(vids):
+                future = executor.submit(download_single_video, url, target_dir, youtube_dl)
+                futures[idx] = future
+
+            results = [None] * len(vids) # pre_allocate slots
+            for future in as_completed(futures):
+                idx = futures[future] # order of submission
+                results[idx] = future.result()
+                progress_bar.update(1) # advance by 1
+
+            print(results)
 
 def main():
     parser = argparse.ArgumentParser(description='download video', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -23,6 +46,17 @@ def main():
     tsv_fn = args.tsv
     df = pd.read_csv(tsv_fn, sep='\t')
     yids = sorted(list(set(df['yid'])))
+
+    # Filter out existing videos from the target list.
+    tgt_yids = []
+    for yid in yids:
+        dest_fn = f"{args.dest}/{yid}.mp4"
+        if os.path.exists(dest_fn) and os.path.isfile(dest_fn):
+            continue
+        tgt_yids.append(yid)
+    print('Number of existing videos:', len(yids) - len(tgt_yids))
+    yids = tgt_yids
+
     print(f"Download {len(yids)} raw videos into {args.dest}")
     os.makedirs(args.dest, exist_ok=True)
     youtube_dl = os.path.join(os.getcwd(), "youtube-dl")
@@ -31,7 +65,8 @@ def main():
         print(cmd)
         subprocess.call(cmd, shell=True)
     if not args.slurm:
-        download_video(yids, args.dest, youtube_dl)
+        # download_video(yids, args.dest, youtube_dl)
+        download_video_ppool(yids, args.dest, youtube_dl)
     else:
         import submitit
         executor = submitit.AutoExecutor(folder='submitit')

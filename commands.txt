@@ -1,0 +1,1 @@
+python prep/crop_video_parallel.py --tsv data/openasl-v1.0.tsv --bbox data/bbox-v1.0.json --raw /scratch/shantanu/openasl --output /scratch/shantanu/openasl_cropped --target-size 448 --ffmpeg /home/shantanu.singh/ffmpeg-git-20220108-amd64-static/ffmpeg

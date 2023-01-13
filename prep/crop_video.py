@@ -83,6 +83,8 @@ def get_clip(input_video_dir, output_video_dir, tsv_fn, bbox_fn, rank, nshard, t
             if not ret:
                 break
             frames_origin.append(frame)
+        if len(frames_origin) == 0:
+            continue
         shutil.rmtree(tmp_dir)
         x0, y0, x1, y1 = bbox
         W, H = frames_origin[0].shape[1], frames_origin[0].shape[0]
